@@ -239,12 +239,28 @@ static void imageProcess(const void* p)
 	unsigned char* src = (unsigned char*)p;
 	unsigned char* dst = malloc(width*height*3*sizeof(char));
 	unsigned int i, line, offset, offset_in_line;
+	char tmp;
 
 	//printf("imageProcess() start\n");
 	//fflush(NULL);
 	//printf("  convert from YUV422 to RGB888\n");
 	// convert from YUV422 to RGB888
 	YUV422toRGB888(width,height,src,dst);
+
+	// swap pixels
+	for (i=0; i<width*height*3; i+=6) {
+		tmp = dst[i+0];
+		dst[i+0] = dst[i+3+0];
+		dst[i+3+0] = tmp;
+
+		tmp = dst[i+1];
+		dst[i+1] = dst[i+3+1];
+		dst[i+3+1] = tmp;
+
+		tmp = dst[i+2];
+		dst[i+2] = dst[i+3+2];
+		dst[i+3+2] = tmp;
+	}
 
 	offset_in_line = (2 * sizeof (char)) * 0;
 
