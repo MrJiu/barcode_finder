@@ -271,7 +271,7 @@ static void imageProcess(const void* p)
 		for (i=0; i<NUM_FFT; i++) {
 			// copy and convert to greyscale
 			//Real[i] = dst[i*3 + offset + 0] + dst[i*3 + offset + 1] + dst[i*3 + offset + 2];
-			Real[i] = src[i*2 + offset];
+			Real[i] = 128 * src[i*2 + offset];  // multiply by N to get better FFT resolution
 		}
 
 		//// print the Real array
