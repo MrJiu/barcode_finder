@@ -57,7 +57,7 @@
 #include <sys/ioctl.h>
 #include <asm/types.h>
 #include <linux/videodev2.h>
-//#include <jpeglib.h>
+#include <jpeglib.h>
 
 //#define NUM_FFT 64
 #include "fft/fft_brin.h"
@@ -183,7 +183,6 @@ static int xioctl(int fd, int request, void* argp)
 
 	\param img image to write
 */
-#if 0
 static void jpegWrite(unsigned char* img)
 {
 	struct jpeg_compress_struct cinfo;
@@ -231,7 +230,6 @@ static void jpegWrite(unsigned char* img)
 	// close output file
 	fclose(outfile);
 }
-#endif
 
 /**
 	process image read
@@ -284,10 +282,10 @@ static void imageProcess(const void* p)
 		printf("\n");
 	}
 
-	/*printf("  jpegWrite()\n");*/
-	/*// write jpeg*/
-	/*jpegWrite(dst);*/
-	/*printf("imageProcess() end\n");*/
+	//printf("  jpegWrite()\n");
+	// write jpeg
+	jpegWrite(dst);
+	//printf("imageProcess() end\n");
 	free(dst);
 }
 
