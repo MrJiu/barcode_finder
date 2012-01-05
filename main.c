@@ -239,8 +239,11 @@ static void imageProcess(const void* p)
 {
 	unsigned char* src = (unsigned char*)p;
 	unsigned char* dst = malloc(width*height*3*sizeof(char));
-	unsigned int i, line, offset, offset_in_line;
+	unsigned int i, j, line, offset, offset_in_line;
+	unsigned int luminance, bar_height, height_tmp;
 	char tmp;
+	const unsigned int luminance_threshold = 300;
+	unsigned int num_long_bars = 0;
 
 	//printf("imageProcess() start\n");
 	//fflush(NULL);
@@ -261,6 +264,55 @@ static void imageProcess(const void* p)
 		tmp = dst[i+2];
 		dst[i+2] = dst[i+3+2];
 		dst[i+3+2] = tmp;
+	}
+
+	// find vertical bar(s)
+	for (i=0; i<height; i++) {
+		for (j=0; j<width; j++) {
+			luminance = dst[width*3*i+j*3+0] + dst[width*3*i+j*3+1] + dst[width*3*i+j*3+2];
+			//printf("luminance: %d at (%d, %d)\n", luminance, j, i);
+			if (luminance < luminance_threshold) {
+				// look for contiguous vertical bar
+				bar_height = 0;
+				/*printf("luminance below luminance_threshold at (%d, %d)\n", j, i);*/
+
+				// scan downwards
+				for (height_tmp=i; height_tmp<height; height_tmp++) {
+					bar_height++;
+					luminance = dst[width*3*height_tmp+j*3+0] + dst[width*3*height_tmp+j*3+1] + dst[width*3*height_tmp+j*3+2];
+					if (luminance > luminance_threshold) {
+						break;
+					} else {
+						//dst[width*3*height_tmp+j*3+0] = 255;
+					}
+				}
+
+				// scan upwards
+				for (height_tmp=i; height_tmp>0; height_tmp--) {
+					bar_height++;
+					luminance = dst[width*3*(height_tmp-1)+j*3+0] + dst[width*3*(height_tmp-1)+j*3+1] + dst[width*3*(height_tmp-1)+j*3+2];
+					if (luminance > luminance_threshold) {
+						break;
+					} else {
+						//dst[width*3*height_tmp+j*3+0] = 255;
+					}
+				}
+
+				if (bar_height > 35) {
+					//dst[width*3*height_tmp+j*3+0] = 255;
+					num_long_bars++;
+					//printf("bar_height: %d at (%d, %d)\n", bar_height, j, i);
+				}
+			}
+		}
+
+		if (num_long_bars > 10) {
+			dst[width*3*i+0] = 255;
+			dst[width*3*i+1] = 0;
+			dst[width*3*i+2] = 0;
+			printf("num_long_bars: %d at line %d\n", num_long_bars, i);
+		}
+		num_long_bars = 0;
 	}
 
 	if (jpegFilename) {
