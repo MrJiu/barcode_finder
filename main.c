@@ -91,6 +91,7 @@ static unsigned int width = 640;
 static unsigned int height = 480;
 static unsigned char jpegQuality = 70;
 static char* jpegFilename = NULL;
+static int do_fft = 0;
 static char* deviceName = "/dev/video0";
 
 /**
@@ -262,16 +263,27 @@ static void imageProcess(const void* p)
 		dst[i+3+2] = tmp;
 	}
 
-	offset_in_line = (2 * sizeof (char)) * 0;
+	if (jpegFilename) {
+		//printf("  jpegWrite()\n");
+		// write jpeg
+		jpegWrite(dst);
+	}
+
+	if (!do_fft) {
+		free(dst);
+		return;
+	}
+
+	offset_in_line = (3 * sizeof (char)) * 40;
 
 	//printf("calculating FFT\n");
 	fflush(NULL);
 	for (line=0; line<height; line++) {
-		offset = (width * 2 * sizeof (char)) * line + offset_in_line;
+		offset = (width * 3 * sizeof (char)) * line + offset_in_line;
 		for (i=0; i<NUM_FFT; i++) {
-			// copy and convert to greyscale
-			//Real[i] = dst[i*3 + offset + 0] + dst[i*3 + offset + 1] + dst[i*3 + offset + 2];
-			Real[i] = 128 * src[i*2 + offset];  // multiply by N to get better FFT resolution
+			Real[i] = dst[i*3 + offset + 0] + dst[i*3 + offset + 1] + dst[i*3 + offset + 2];
+			Real[i] *= 42;
+			//Real[i] = 128 * src[i*2 + offset];   multiply by N to get better FFT resolution
 		}
 
 		//// print the Real array
@@ -298,9 +310,6 @@ static void imageProcess(const void* p)
 		printf("\n");
 	}
 
-	//printf("  jpegWrite()\n");
-	// write jpeg
-	jpegWrite(dst);
 	//printf("imageProcess() end\n");
 	free(dst);
 }
@@ -877,6 +886,7 @@ static void usage(FILE* fp, int argc, char** argv)
 		"-d | --device name   Video device name [/dev/video0]\n"
 		"-h | --help          Print this message\n"
 		"-o | --output        JPEG output filename\n"
+		"-f | --fft           FFT data to stdout\n"
 		"-q | --quality       JPEG quality (0-100)\n"
 		"-m | --mmap          Use memory mapped buffers\n"
 		"-r | --read          Use read() calls\n"
@@ -887,13 +897,14 @@ static void usage(FILE* fp, int argc, char** argv)
 		argv[0]);
 	}
 
-static const char short_options [] = "d:ho:q:mruW:H:";
+static const char short_options [] = "d:ho:fq:mruW:H:";
 
 static const struct option
 long_options [] = {
 	{ "device",     required_argument,      NULL,           'd' },
 	{ "help",       no_argument,            NULL,           'h' },
 	{ "output",     required_argument,      NULL,           'o' },
+	{ "fft",        no_argument,            NULL,           'f' },
 	{ "quality",    required_argument,      NULL,           'q' },
 	{ "mmap",       no_argument,            NULL,           'm' },
 	{ "read",       no_argument,            NULL,           'r' },
@@ -905,7 +916,6 @@ long_options [] = {
 
 int main(int argc, char **argv)
 {
-
 	for (;;) {
 		int index, c = 0;
 
@@ -930,6 +940,10 @@ int main(int argc, char **argv)
 			case 'o':
 				// set jpeg filename
 				jpegFilename = optarg;
+				break;
+
+			case 'f':
+				do_fft = 1;
 				break;
 
 			case 'q':
@@ -978,13 +992,6 @@ int main(int argc, char **argv)
 				usage(stderr, argc, argv);
 				exit(EXIT_FAILURE);
 		}
-	}
-
-	// check for need parameters
-	if (!jpegFilename) {
-		fprintf(stderr, "You have to specify JPEG output filename!\n\n");
-		usage(stdout, argc, argv);
-		exit(EXIT_FAILURE); 
 	}
 
 	// open and initialize device
