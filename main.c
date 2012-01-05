@@ -244,6 +244,9 @@ static void imageProcess(const void* p)
 	char tmp;
 	const unsigned int luminance_threshold = 300;
 	unsigned int num_long_bars = 0;
+	signed int line_where_barcode_begins, line_where_barcode_ends;
+
+	line_where_barcode_begins = line_where_barcode_ends = -1;
 
 	//printf("imageProcess() start\n");
 	//fflush(NULL);
@@ -311,9 +314,19 @@ static void imageProcess(const void* p)
 			dst[width*3*i+1] = 0;
 			dst[width*3*i+2] = 0;
 			printf("num_long_bars: %d at line %d\n", num_long_bars, i);
+
+			if (line_where_barcode_begins < 0) {
+				line_where_barcode_begins = i;
+			}
+			line_where_barcode_ends = i;
 		}
 		num_long_bars = 0;
 	}
+
+	int barcode_hight = line_where_barcode_ends - line_where_barcode_begins;
+	int center = line_where_barcode_begins + barcode_hight / 2;
+	printf("%d pixel high barcode found centered around line %d (start %d, end %d)\n",
+			barcode_hight, center, line_where_barcode_begins, line_where_barcode_ends);
 
 	if (jpegFilename) {
 		//printf("  jpegWrite()\n");
