@@ -92,6 +92,7 @@ static unsigned int height = 480;
 static unsigned char jpegQuality = 70;
 static char* jpegFilename = NULL;
 static int do_fft = 0;
+static int find_barcode = 0;
 static char* deviceName = "/dev/video0";
 
 /**
@@ -270,63 +271,65 @@ static void imageProcess(const void* p)
 	}
 
 	// find vertical bar(s)
-	for (i=0; i<height; i++) {
-		for (j=0; j<width; j++) {
-			luminance = dst[width*3*i+j*3+0] + dst[width*3*i+j*3+1] + dst[width*3*i+j*3+2];
-			//printf("luminance: %d at (%d, %d)\n", luminance, j, i);
-			if (luminance < luminance_threshold) {
-				// look for contiguous vertical bar
-				bar_height = 0;
-				/*printf("luminance below luminance_threshold at (%d, %d)\n", j, i);*/
+	if (find_barcode) {
+		for (i=0; i<height; i++) {
+			for (j=0; j<width; j++) {
+				luminance = dst[width*3*i+j*3+0] + dst[width*3*i+j*3+1] + dst[width*3*i+j*3+2];
+				//printf("luminance: %d at (%d, %d)\n", luminance, j, i);
+				if (luminance < luminance_threshold) {
+					// look for contiguous vertical bar
+					bar_height = 0;
+					/*printf("luminance below luminance_threshold at (%d, %d)\n", j, i);*/
 
-				// scan downwards
-				for (height_tmp=i; height_tmp<height; height_tmp++) {
-					bar_height++;
-					luminance = dst[width*3*height_tmp+j*3+0] + dst[width*3*height_tmp+j*3+1] + dst[width*3*height_tmp+j*3+2];
-					if (luminance > luminance_threshold) {
-						break;
-					} else {
+					// scan downwards
+					for (height_tmp=i; height_tmp<height; height_tmp++) {
+						bar_height++;
+						luminance = dst[width*3*height_tmp+j*3+0] + dst[width*3*height_tmp+j*3+1] + dst[width*3*height_tmp+j*3+2];
+						if (luminance > luminance_threshold) {
+							break;
+						} else {
+							//dst[width*3*height_tmp+j*3+0] = 255;
+						}
+					}
+
+					// scan upwards
+					for (height_tmp=i; height_tmp>0; height_tmp--) {
+						bar_height++;
+						luminance = dst[width*3*(height_tmp-1)+j*3+0] + dst[width*3*(height_tmp-1)+j*3+1] + dst[width*3*(height_tmp-1)+j*3+2];
+						if (luminance > luminance_threshold) {
+							break;
+						} else {
+							//dst[width*3*height_tmp+j*3+0] = 255;
+						}
+					}
+
+					if (bar_height > 35) {
 						//dst[width*3*height_tmp+j*3+0] = 255;
+						num_long_bars++;
+						//printf("bar_height: %d at (%d, %d)\n", bar_height, j, i);
 					}
 				}
-
-				// scan upwards
-				for (height_tmp=i; height_tmp>0; height_tmp--) {
-					bar_height++;
-					luminance = dst[width*3*(height_tmp-1)+j*3+0] + dst[width*3*(height_tmp-1)+j*3+1] + dst[width*3*(height_tmp-1)+j*3+2];
-					if (luminance > luminance_threshold) {
-						break;
-					} else {
-						//dst[width*3*height_tmp+j*3+0] = 255;
-					}
-				}
-
-				if (bar_height > 35) {
-					//dst[width*3*height_tmp+j*3+0] = 255;
-					num_long_bars++;
-					//printf("bar_height: %d at (%d, %d)\n", bar_height, j, i);
-				}
 			}
+
+			if (num_long_bars > 10) {
+				dst[width*3*i+0] = 255;
+				dst[width*3*i+1] = 0;
+				dst[width*3*i+2] = 0;
+				printf("num_long_bars: %d at line %d\n", num_long_bars, i);
+
+				if (line_where_barcode_begins < 0) {
+					line_where_barcode_begins = i;
+				}
+				line_where_barcode_ends = i;
+			}
+			num_long_bars = 0;
 		}
 
-		if (num_long_bars > 10) {
-			dst[width*3*i+0] = 255;
-			dst[width*3*i+1] = 0;
-			dst[width*3*i+2] = 0;
-			printf("num_long_bars: %d at line %d\n", num_long_bars, i);
-
-			if (line_where_barcode_begins < 0) {
-				line_where_barcode_begins = i;
-			}
-			line_where_barcode_ends = i;
-		}
-		num_long_bars = 0;
+		int barcode_hight = line_where_barcode_ends - line_where_barcode_begins;
+		int center = line_where_barcode_begins + barcode_hight / 2;
+		printf("%d pixel high barcode found centered around line %d (start %d, end %d)\n",
+				barcode_hight, center, line_where_barcode_begins, line_where_barcode_ends);
 	}
-
-	int barcode_hight = line_where_barcode_ends - line_where_barcode_begins;
-	int center = line_where_barcode_begins + barcode_hight / 2;
-	printf("%d pixel high barcode found centered around line %d (start %d, end %d)\n",
-			barcode_hight, center, line_where_barcode_begins, line_where_barcode_ends);
 
 	if (jpegFilename) {
 		//printf("  jpegWrite()\n");
@@ -952,6 +955,7 @@ static void usage(FILE* fp, int argc, char** argv)
 		"-h | --help          Print this message\n"
 		"-o | --output        JPEG output filename\n"
 		"-f | --fft           FFT data to stdout\n"
+		"-b | --barcode       detect barcode\n"
 		"-q | --quality       JPEG quality (0-100)\n"
 		"-m | --mmap          Use memory mapped buffers\n"
 		"-r | --read          Use read() calls\n"
@@ -962,7 +966,7 @@ static void usage(FILE* fp, int argc, char** argv)
 		argv[0]);
 	}
 
-static const char short_options [] = "d:ho:fq:mruW:H:";
+static const char short_options [] = "d:ho:fbq:mruW:H:";
 
 static const struct option
 long_options [] = {
@@ -970,6 +974,7 @@ long_options [] = {
 	{ "help",       no_argument,            NULL,           'h' },
 	{ "output",     required_argument,      NULL,           'o' },
 	{ "fft",        no_argument,            NULL,           'f' },
+	{ "barcode",    no_argument,            NULL,           'b' },
 	{ "quality",    required_argument,      NULL,           'q' },
 	{ "mmap",       no_argument,            NULL,           'm' },
 	{ "read",       no_argument,            NULL,           'r' },
@@ -1009,6 +1014,10 @@ int main(int argc, char **argv)
 
 			case 'f':
 				do_fft = 1;
+				break;
+
+			case 'b':
+				find_barcode = 1;
 				break;
 
 			case 'q':
