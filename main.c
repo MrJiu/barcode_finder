@@ -325,10 +325,10 @@ static void imageProcess(const void* p)
 			num_long_bars = 0;
 		}
 
-		int barcode_hight = line_where_barcode_ends - line_where_barcode_begins;
-		int center = line_where_barcode_begins + barcode_hight / 2;
+		int barcode_height = line_where_barcode_ends - line_where_barcode_begins;
+		int center = line_where_barcode_begins + barcode_height / 2;
 		printf("%d pixel high barcode found centered around line %d (start %d, end %d)\n",
-				barcode_hight, center, line_where_barcode_begins, line_where_barcode_ends);
+				barcode_height, center, line_where_barcode_begins, line_where_barcode_ends);
 	}
 
 	if (jpegFilename) {
