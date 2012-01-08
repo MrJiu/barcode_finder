@@ -239,7 +239,7 @@ static void jpegWrite(unsigned char* img)
 static void imageProcess(const void* p)
 {
 	unsigned char* src = (unsigned char*)p;
-	unsigned char* dst = malloc(width*height*3*sizeof(char));
+	unsigned char* dst;
 	unsigned int i, j, line, offset, offset_in_line;
 	unsigned int luminance, bar_height, height_tmp;
 	char tmp;
@@ -248,6 +248,12 @@ static void imageProcess(const void* p)
 	signed int line_where_barcode_begins, line_where_barcode_ends;
 
 	line_where_barcode_begins = line_where_barcode_ends = -1;
+
+	dst = malloc(width*height*3*sizeof(char));
+	if (dst == NULL) {
+		perror("malloc");
+		exit(1);
+	}
 
 	//printf("imageProcess() start\n");
 	//fflush(NULL);
