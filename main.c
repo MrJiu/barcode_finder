@@ -335,6 +335,9 @@ static void imageProcess(const void* p)
 		int center = line_where_barcode_begins + barcode_height / 2;
 		printf("%d pixel high barcode found centered around line %d (start %d, end %d)\n",
 				barcode_height, center, line_where_barcode_begins, line_where_barcode_ends);
+		if (barcode_height > 70) {
+			printf("WARN: very high barcode: %d\n", barcode_height);
+		}
 	}
 
 	if (jpegFilename) {
