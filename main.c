@@ -44,6 +44,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <assert.h>
 #include <getopt.h>
 #include <fcntl.h>
@@ -94,6 +95,20 @@ static char* jpegFilename = NULL;
 static int do_fft = 0;
 static int find_barcode = 0;
 static char* deviceName = "/dev/video0";
+
+static void captureStop(void);
+static void deviceUninit(void);
+static void deviceClose(void);
+
+void sighandler(int signum)
+{
+	printf("Caught signal %d, clean up and exit. TODO: set event flag and clean up in appropriate places...\n", signum);
+	captureStop();
+	deviceUninit();
+	deviceClose();
+	exit(EXIT_SUCCESS);
+}
+
 
 /**
 	Convert from YUV422 format to RGB888. Formulae are described on http://en.wikipedia.org/wiki/YUV
@@ -1076,6 +1091,8 @@ int main(int argc, char **argv)
 				exit(EXIT_FAILURE);
 		}
 	}
+
+	signal(SIGINT, sighandler);
 
 	// open and initialize device
 	deviceOpen();
