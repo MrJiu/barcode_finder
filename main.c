@@ -92,6 +92,7 @@ static unsigned int width = 640;
 static unsigned int height = 480;
 static unsigned char jpegQuality = 70;
 static char* jpegFilename = NULL;
+static int swap_pixels = 0;
 static int do_fft = 0;
 static int find_barcode = 0;
 static char* deviceName = "/dev/video0";
@@ -277,18 +278,20 @@ static void imageProcess(const void* p)
 	YUV422toRGB888(width,height,src,dst);
 
 	// swap pixels
-	for (i=0; i<width*height*3; i+=6) {
-		tmp = dst[i+0];
-		dst[i+0] = dst[i+3+0];
-		dst[i+3+0] = tmp;
+	if (swap_pixels) {
+		for (i=0; i<width*height*3; i+=6) {
+			tmp = dst[i+0];
+			dst[i+0] = dst[i+3+0];
+			dst[i+3+0] = tmp;
 
-		tmp = dst[i+1];
-		dst[i+1] = dst[i+3+1];
-		dst[i+3+1] = tmp;
+			tmp = dst[i+1];
+			dst[i+1] = dst[i+3+1];
+			dst[i+3+1] = tmp;
 
-		tmp = dst[i+2];
-		dst[i+2] = dst[i+3+2];
-		dst[i+3+2] = tmp;
+			tmp = dst[i+2];
+			dst[i+2] = dst[i+3+2];
+			dst[i+3+2] = tmp;
+		}
 	}
 
 	// find vertical bar(s)
@@ -978,6 +981,7 @@ static void usage(FILE* fp, int argc, char** argv)
 		"-d | --device name   Video device name [/dev/video0]\n"
 		"-h | --help          Print this message\n"
 		"-o | --output        JPEG output filename\n"
+		"-s | --swap-pixels   swap pixels (needed on Atmel ISI)\n"
 		"-f | --fft           FFT data to stdout\n"
 		"-b | --barcode       detect barcode\n"
 		"-q | --quality       JPEG quality (0-100)\n"
@@ -990,7 +994,7 @@ static void usage(FILE* fp, int argc, char** argv)
 		argv[0]);
 	}
 
-static const char short_options [] = "d:ho:fbq:mruW:H:";
+static const char short_options [] = "d:ho:sfbq:mruW:H:";
 
 static const struct option
 long_options [] = {
@@ -1034,6 +1038,10 @@ int main(int argc, char **argv)
 			case 'o':
 				// set jpeg filename
 				jpegFilename = optarg;
+				break;
+
+			case 's':
+				swap_pixels = 1;
 				break;
 
 			case 'f':
