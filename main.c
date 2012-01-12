@@ -82,6 +82,14 @@ struct buffer {
         size_t                  length;
 };
 
+struct surface {
+	unsigned char *buf;
+	unsigned int width;
+	unsigned int height;
+	unsigned int bytes_per_pixel;
+};
+
+
 static io_method        io              = IO_METHOD_MMAP;
 static int              fd              = -1;
 struct buffer *         buffers         = NULL;
@@ -249,19 +257,135 @@ static void jpegWrite(unsigned char* img)
 	fclose(outfile);
 }
 
+
+int clip256(int val)
+{
+	if (val < 0) {
+		return 0;
+	} else if (val > 256) {
+		return 256;
+	} else {
+		return val;
+	}
+}
+
+
+int fetch_pixel(struct surface *surf, unsigned int x, unsigned int y,
+		unsigned char *r, unsigned char *g, unsigned char *b)
+{
+	if (surf->bytes_per_pixel != 3) {
+		return -1;
+	}
+
+	*r = surf->buf[surf->width * surf->bytes_per_pixel * y + x * surf->bytes_per_pixel + 0];
+	*g = surf->buf[surf->width * surf->bytes_per_pixel * y + x * surf->bytes_per_pixel + 1];
+	*b = surf->buf[surf->width * surf->bytes_per_pixel * y + x * surf->bytes_per_pixel + 2];
+
+	return 0;
+}
+
+
+int get_luminance(struct surface *surf, int *max, int *min, int *avg)
+{
+	unsigned int i, j;
+	unsigned int luminance;
+	unsigned long total_luminance = 0;
+	unsigned char r, g, b;
+
+	*max = 0;
+	*min = 255;
+
+	for (i=0; i<surf->height; i++) {
+		for (j=0; j<surf->width; j++) {
+			fetch_pixel(surf, j, i, &r, &g, &b);
+			luminance = (r + g + b) / 3;
+			total_luminance += luminance;
+
+			if (luminance > *max) {
+				*max = luminance;
+			}
+
+			if (luminance < *min) {
+				*min = luminance;
+			}
+		}
+	}
+
+	*avg = total_luminance / (width * height);
+	return 0;
+}
+
+
+int draw_pixel(struct surface *surf, unsigned int x, unsigned int y,
+		unsigned char r, unsigned char g, unsigned char b)
+{
+	unsigned int offset;
+
+	if (surf->bytes_per_pixel != 3) {
+		return -1;
+	}
+
+	offset = surf->width * surf->bytes_per_pixel * y + surf->bytes_per_pixel * x;
+	surf->buf[offset + 0] = r;
+	surf->buf[offset + 1] = g;
+	surf->buf[offset + 2] = b;
+	return 0;
+}
+
+// http://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
+int draw_line(struct surface *surf,
+		unsigned int x0, unsigned int y0,
+		unsigned int x1, unsigned int y1,
+		unsigned char r, unsigned char g, unsigned char b)
+{
+	int dx, dy, sx, sy, err, e2;
+
+	if (surf->bytes_per_pixel != 3) {
+		return -1;
+	}
+
+	dx = abs(x1 - x0);
+	dy = abs(y1 - y0);
+	sx = x0 < x1 ? 1 : -1;
+	sy = y0 < y1 ? 1 : -1;
+	err = dx - dy;
+
+	while (1) {
+		draw_pixel(surf, x0, y0, r, g, b);
+		if (x0 == x1 && y0 == y1) {
+			break;
+		}
+		e2 = 2 * err;
+		if (e2 > -dy) {
+			err = err - dy;
+			x0 = x0 + sx;
+		}
+		if (e2 < dx) {
+			err = err + dx;
+			y0 = y0 + sy;
+		}
+	}
+
+	return 0;
+}
+
+
 /**
 	process image read
 */
 static void imageProcess(const void* p)
 {
 	unsigned char* src = (unsigned char*)p;
-	unsigned char* dst;
+	unsigned char *dst, *dst_copy;
 	unsigned int i, j, line, offset, offset_in_line;
 	unsigned int luminance, bar_height, height_tmp;
 	char tmp;
 	const unsigned int luminance_threshold = 300;
 	unsigned int num_long_bars = 0;
 	signed int line_where_barcode_begins, line_where_barcode_ends;
+	struct surface surf;
+	unsigned char r, g, b;
+	unsigned int bar_begin, bar_end;
 
 	line_where_barcode_begins = line_where_barcode_ends = -1;
 
@@ -294,41 +418,61 @@ static void imageProcess(const void* p)
 		}
 	}
 
+	// make a copy we can mess up
+	dst_copy = malloc(width*height*3*sizeof(char));
+	if (dst_copy == NULL) {
+		perror("malloc");
+		exit(1);
+	}
+	memcpy(dst_copy, dst, width*height*3*sizeof(char));
+
+	surf.bytes_per_pixel = 3;
+	surf.width = width;
+	surf.height = height;
+	surf.buf = dst_copy;
+
 	// find vertical bar(s)
 	if (find_barcode) {
-		for (i=0; i<height; i++) {
+		for (i=0; i<height; i+=20) {
 			for (j=0; j<width; j++) {
-				luminance = dst[width*3*i+j*3+0] + dst[width*3*i+j*3+1] + dst[width*3*i+j*3+2];
+				fetch_pixel(&surf, j, i, &r, &g, &b);
+				luminance = r + g + b;
 				//printf("luminance: %d at (%d, %d)\n", luminance, j, i);
 				if (luminance < luminance_threshold) {
 					// look for contiguous vertical bar
 					bar_height = 0;
+					bar_begin = bar_end = i;
 					/*printf("luminance below luminance_threshold at (%d, %d)\n", j, i);*/
 
 					// scan downwards
 					for (height_tmp=i; height_tmp<height; height_tmp++) {
 						bar_height++;
-						luminance = dst[width*3*height_tmp+j*3+0] + dst[width*3*height_tmp+j*3+1] + dst[width*3*height_tmp+j*3+2];
+						bar_end = height_tmp;
+						fetch_pixel(&surf, j, height_tmp, &r, &g, &b);
+						luminance = r + g + b;
 						if (luminance > luminance_threshold) {
 							break;
 						} else {
-							//dst[width*3*height_tmp+j*3+0] = 255;
+							draw_pixel(&surf, j, height_tmp, 0, 0, 255);
 						}
 					}
 
 					// scan upwards
 					for (height_tmp=i; height_tmp>0; height_tmp--) {
 						bar_height++;
-						luminance = dst[width*3*(height_tmp-1)+j*3+0] + dst[width*3*(height_tmp-1)+j*3+1] + dst[width*3*(height_tmp-1)+j*3+2];
+						bar_begin = height_tmp;
+						fetch_pixel(&surf, j, height_tmp-1, &r, &g, &b);
+						luminance = r + g + b;
 						if (luminance > luminance_threshold) {
 							break;
 						} else {
-							//dst[width*3*height_tmp+j*3+0] = 255;
+							draw_pixel(&surf, j, height_tmp, 0, 255, 0);
 						}
 					}
 
 					if (bar_height > 35) {
-						//dst[width*3*height_tmp+j*3+0] = 255;
+						//draw_pixel(&surf, j, height_tmp, 255, 0, 0);
+						draw_line(&surf, j, bar_begin, j, bar_end, 255, 0, 0);
 						num_long_bars++;
 						//printf("bar_height: %d at (%d, %d)\n", bar_height, j, i);
 					}
@@ -336,9 +480,8 @@ static void imageProcess(const void* p)
 			}
 
 			if (num_long_bars > 10) {
-				dst[width*3*i+0] = 255;
-				dst[width*3*i+1] = 0;
-				dst[width*3*i+2] = 0;
+				//draw_pixel(&surf, 0, i, 255, 0, 0);
+				//draw_line(&surf, 0, i, 0+5, i, 255, 0, 0);
 				printf("num_long_bars: %d at line %d\n", num_long_bars, i);
 
 				if (line_where_barcode_begins < 0) {
@@ -353,19 +496,28 @@ static void imageProcess(const void* p)
 		int center = line_where_barcode_begins + barcode_height / 2;
 		printf("%d pixel high barcode found centered around line %d (start %d, end %d)\n",
 				barcode_height, center, line_where_barcode_begins, line_where_barcode_ends);
+		draw_line(&surf, 0, line_where_barcode_begins, 0, line_where_barcode_ends, 255, 255, 0);
 		if (barcode_height > 70) {
 			printf("WARN: very high barcode: %d\n", barcode_height);
 		}
 	}
 
+
+	{
+		int max, min, avg;
+		get_luminance(&surf, &max, &min, &avg);
+		printf("luminance (max/min/avg): %d %d %d\n", max, min, avg);
+	}
+
 	if (jpegFilename) {
 		//printf("  jpegWrite()\n");
 		// write jpeg
-		jpegWrite(dst);
+		jpegWrite(dst_copy);
 	}
 
 	if (!do_fft) {
 		free(dst);
+		free(dst_copy);
 		return;
 	}
 
@@ -407,6 +559,7 @@ static void imageProcess(const void* p)
 
 	//printf("imageProcess() end\n");
 	free(dst);
+	free(dst_copy);
 }
 
 /**
