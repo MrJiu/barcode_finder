@@ -381,13 +381,14 @@ static void imageProcess(const void* p)
 	unsigned int luminance, bar_height, height_tmp;
 	char tmp;
 	const unsigned int luminance_threshold = 300;
-	unsigned int num_long_bars = 0;
 	signed int line_where_barcode_begins, line_where_barcode_ends;
 	struct surface surf;
 	unsigned char r, g, b;
 	unsigned int bar_begin, bar_end;
+	unsigned int barcount[height];
 
-	line_where_barcode_begins = line_where_barcode_ends = -1;
+	line_where_barcode_begins = height-1;
+	line_where_barcode_ends = 0;
 
 	dst = malloc(width*height*3*sizeof(char));
 	if (dst == NULL) {
@@ -434,6 +435,7 @@ static void imageProcess(const void* p)
 	// find vertical bar(s)
 	if (find_barcode) {
 		for (i=0; i<height; i+=20) {
+			memset(barcount, 0, sizeof barcount);
 			for (j=0; j<width; j++) {
 				fetch_pixel(&surf, j, i, &r, &g, &b);
 				luminance = r + g + b;
@@ -470,35 +472,50 @@ static void imageProcess(const void* p)
 						}
 					}
 
-					if (bar_height > 35) {
+					if (bar_height > 50) {
 						//draw_pixel(&surf, j, height_tmp, 255, 0, 0);
+						for (int i=bar_begin; i<=bar_end; i++) {
+							barcount[i]++;
+						}
 						draw_line(&surf, j, bar_begin, j, bar_end, 255, 0, 0);
-						num_long_bars++;
 						//printf("bar_height: %d at (%d, %d)\n", bar_height, j, i);
 					}
 				}
 			}
 
-			if (num_long_bars > 10) {
-				//draw_pixel(&surf, 0, i, 255, 0, 0);
-				//draw_line(&surf, 0, i, 0+5, i, 255, 0, 0);
-				printf("num_long_bars: %d at line %d\n", num_long_bars, i);
-
-				if (line_where_barcode_begins < 0) {
-					line_where_barcode_begins = i;
+			if (barcount[i] > 20) {
+				for (int k=i; k>0; k--) {
+					if (barcount[k] > 20) {
+						if (line_where_barcode_begins > k) {
+							line_where_barcode_begins = k;
+						}
+					}
 				}
-				line_where_barcode_ends = i;
+
+				for (int k=i; k<height; k++) {
+					if (barcount[k] > 20) {
+						if (line_where_barcode_ends < k) {
+							line_where_barcode_ends = k;
+						}
+					}
+				}
 			}
-			num_long_bars = 0;
 		}
 
 		int barcode_height = line_where_barcode_ends - line_where_barcode_begins;
+		if (barcode_height <= 0) {
+			barcode_height = 0;
+			line_where_barcode_begins = -1;
+			line_where_barcode_ends = -1;
+		} else {
+			draw_line(&surf, 0, line_where_barcode_begins, 0, line_where_barcode_ends, 255, 255, 0);
+		}
+
 		int center = line_where_barcode_begins + barcode_height / 2;
 		printf("%d pixel high barcode found centered around line %d (start %d, end %d)\n",
 				barcode_height, center, line_where_barcode_begins, line_where_barcode_ends);
-		draw_line(&surf, 0, line_where_barcode_begins, 0, line_where_barcode_ends, 255, 255, 0);
-		if (barcode_height > 70) {
-			printf("WARN: very high barcode: %d\n", barcode_height);
+		if (barcode_height > 90) {
+			//printf("WARN: very high barcode: %d\n", barcode_height);
 		}
 	}
 
@@ -506,7 +523,7 @@ static void imageProcess(const void* p)
 	{
 		int max, min, avg;
 		get_luminance(&surf, &max, &min, &avg);
-		printf("luminance (max/min/avg): %d %d %d\n", max, min, avg);
+		//printf("luminance (max/min/avg): %d %d %d\n", max, min, avg);
 	}
 
 	if (jpegFilename) {
