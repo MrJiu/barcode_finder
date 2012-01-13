@@ -380,12 +380,13 @@ static void imageProcess(const void* p)
 	unsigned int i, j, line, offset, offset_in_line;
 	unsigned int luminance, bar_height, height_tmp;
 	char tmp;
-	const unsigned int luminance_threshold = 300;
+	unsigned int luminance_threshold;
 	signed int line_where_barcode_begins, line_where_barcode_ends;
 	struct surface surf;
 	unsigned char r, g, b;
 	unsigned int bar_begin, bar_end;
 	unsigned int barcount[height];
+	int max, min, avg;
 
 	line_where_barcode_begins = height-1;
 	line_where_barcode_ends = 0;
@@ -431,6 +432,10 @@ static void imageProcess(const void* p)
 	surf.width = width;
 	surf.height = height;
 	surf.buf = dst_copy;
+
+	get_luminance(&surf, &max, &min, &avg);
+	//printf("luminance (max/min/avg): %d %d %d\n", max, min, avg);
+	luminance_threshold = avg * 3 * 0.7;
 
 	// find vertical bar(s)
 	if (find_barcode) {
@@ -517,13 +522,6 @@ static void imageProcess(const void* p)
 		if (barcode_height > 90) {
 			//printf("WARN: very high barcode: %d\n", barcode_height);
 		}
-	}
-
-
-	{
-		int max, min, avg;
-		get_luminance(&surf, &max, &min, &avg);
-		//printf("luminance (max/min/avg): %d %d %d\n", max, min, avg);
 	}
 
 	if (jpegFilename) {
