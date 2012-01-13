@@ -273,13 +273,16 @@ int clip256(int val)
 int fetch_pixel(struct surface *surf, unsigned int x, unsigned int y,
 		unsigned char *r, unsigned char *g, unsigned char *b)
 {
+	unsigned int offset;
+
 	if (surf->bytes_per_pixel != 3) {
 		return -1;
 	}
 
-	*r = surf->buf[surf->width * surf->bytes_per_pixel * y + x * surf->bytes_per_pixel + 0];
-	*g = surf->buf[surf->width * surf->bytes_per_pixel * y + x * surf->bytes_per_pixel + 1];
-	*b = surf->buf[surf->width * surf->bytes_per_pixel * y + x * surf->bytes_per_pixel + 2];
+	offset = surf->width * surf->bytes_per_pixel * y + surf->bytes_per_pixel * x;
+	*r = surf->buf[offset + 0];
+	*g = surf->buf[offset + 1];
+	*b = surf->buf[offset + 2];
 
 	return 0;
 }
