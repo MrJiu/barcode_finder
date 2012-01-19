@@ -39,7 +39,9 @@
 #define IO_USERPTR
 #endif
 
+#ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 600
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
