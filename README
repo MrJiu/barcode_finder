@@ -1,0 +1,5 @@
+barcode_finder is a stupid little 1D barcode finder. It doesn't try to decode
+the barcode and is easy to fool, but in a controlled environment it does the
+job.
+
+It is a fork of https://github.com/twam/v4l2grab
