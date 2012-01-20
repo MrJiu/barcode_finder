@@ -413,7 +413,7 @@ int do_find_barcode1(struct surface *surf)
 
 	get_luminance(surf, &p0, &p1, &max, &min, &avg);
 	//printf("luminance (max/min/avg): %d %d %d\n", max, min, avg);
-	luminance_threshold = avg * 3 * 0.7;
+	luminance_threshold = 3 * (avg - (avg - min) * 0.5);
 
 	for (i=0; i<surf->height; i+=20) {
 		memset(barcount, 0, sizeof barcount);
