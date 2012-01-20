@@ -390,6 +390,309 @@ int draw_line(struct surface *surf,
 }
 
 
+// Scan a line in surface *surf and count the number of contiguous sections
+// that has a luminance below the given threshold (+ hysteresis).
+int contiguous_dark_sections(struct surface *surf, unsigned int line,
+		unsigned char luminance_threshold, unsigned int hysteresis,
+		unsigned int *num_sections)
+{
+	enum state {NO_MATCH, MATCH} state = NO_MATCH;
+	unsigned char r, g, b;
+	unsigned char luminance;
+	int i;
+	int bar_width = 0;
+
+	*num_sections = 0;
+
+	if (line >= surf->height) {
+		return -1;
+	}
+
+	for (i = 0; i < surf->width; i++) {
+		fetch_pixel(surf, i, line, &r, &g, &b);
+		luminance = (r + g + b) / 3;
+
+		if (luminance < luminance_threshold - hysteresis) {
+			if (state != MATCH) {
+				state = MATCH;
+				bar_width = 1;
+				(*num_sections)++;
+				draw_pixel(surf, i, line, 255, 0, 0);
+			} else {
+				bar_width++;
+			}
+		} else if (luminance >= luminance_threshold + hysteresis) {
+			if (state == MATCH) {
+				state = NO_MATCH;
+				bar_width = 0;
+				draw_pixel(surf, i, line, 0, 255, 0);
+			}
+		} else {
+			if (state == MATCH) {
+				bar_width++;
+			}
+		}
+	}
+
+	return 0;
+}
+
+
+// locate global maximum of the values in buf, move to both sides until
+// value<(max-threshold), where threshold=(max-min)*ratio, and return the
+// front and back edges of the peak area.
+int find_peak_area(int *buf, unsigned int len, int *front_edge, int *back_edge)
+{
+	int min, max, max_pos;
+	int front_edge_index, back_edge_index;
+	int i;
+	int threshold;
+
+	min = max = buf[0];
+	max_pos = 0;
+
+	for (i = 0; i < len; i++) {
+		if (buf[i] < min) {
+			min = buf[i];
+		}
+		if (buf[i] > max) {
+			max = buf[i];
+			max_pos = i;
+		}
+	}
+
+	threshold = (max - min) * 0.4;
+
+	for (int i=max_pos; i<len; i++) {
+		if (buf[i] < (max - threshold)) {
+			break;
+		} else {
+			back_edge_index = i;
+		}
+	}
+
+	for (int i=max_pos; i>=0; i--) {
+		if (buf[i] < (max - threshold)) {
+			break;
+		} else {
+			front_edge_index = i;
+		}
+	}
+
+	if (front_edge && back_edge) {
+		*front_edge = front_edge_index;
+		*back_edge = back_edge_index;
+	}
+
+	return 0;
+}
+
+// from https://github.com/xuphys/peakdetect
+int detect_peak(
+        const int *data, /* the data */
+        int data_count, /* row count of data */
+        int* emi_peaks, /* emission peaks will be put here */
+        int* num_emi_peaks, /* number of emission peaks found */
+        int max_emi_peaks, /* maximum number of emission peaks */
+        int* absop_peaks, /* absorption peaks will be put here */
+        int* num_absop_peaks, /* number of absorption peaks found */
+        int max_absop_peaks, /* maximum number of absorption peaks
+*/
+        double delta, /* delta used for distinguishing peaks */
+        int emi_first /* should we search emission peak first of
+absorption peak first? */
+        )
+{
+    int i;
+    double mx;
+    double mn;
+    int mx_pos = 0;
+    int mn_pos = 0;
+    int is_detecting_emi = emi_first;
+
+
+    mx = data[0];
+    mn = data[0];
+
+    *num_emi_peaks = 0;
+    *num_absop_peaks = 0;
+
+    for(i = 1; i < data_count; ++i)
+    {
+        if(data[i] > mx)
+        {
+            mx_pos = i;
+            mx = data[i];
+        }
+        if(data[i] < mn)
+        {
+            mn_pos = i;
+            mn = data[i];
+        }
+
+        if(is_detecting_emi &&
+                data[i] < mx - delta)
+        {
+            if(*num_emi_peaks >= max_emi_peaks) /* not enough spaces */
+                return 1;
+
+            emi_peaks[*num_emi_peaks] = mx_pos;
+            ++ (*num_emi_peaks);
+
+            is_detecting_emi = 0;
+
+            i = mx_pos - 1;
+
+            mn = data[mx_pos];
+            mn_pos = mx_pos;
+        }
+        else if((!is_detecting_emi) &&
+                data[i] > mn + delta)
+        {
+            if(*num_absop_peaks >= max_absop_peaks)
+                return 2;
+
+            absop_peaks[*num_absop_peaks] = mn_pos;
+            ++ (*num_absop_peaks);
+
+            is_detecting_emi = 1;
+
+            i = mn_pos - 1;
+
+            mx = data[mn_pos];
+            mx_pos = data[mn_pos];
+        }
+    }
+
+    return 0;
+}
+
+
+int do_find_barcode3(struct surface *surf)
+{
+	int y, x;
+	int data[surf->width];
+        int emi_peaks[surf->width];        /* emission peaks will be put here */
+        int num_emi_peaks;                 /* number of emission peaks found */
+        int max_emi_peaks = surf->width;   /* maximum number of emission peaks */
+        int absop_peaks[surf->width];      /* absorption peaks will be put here */
+        int num_absop_peaks;               /* number of absorption peaks found */
+        int max_absop_peaks = surf->width; /* maximum number of absorption peaks */
+        double delta = 40;                 /* delta used for distinguishing peaks */
+        int emi_first = 1;                 /* should we search emission peak first of absorption peak first? */
+	unsigned char r, g, b, luminance;
+
+	int bars[surf->height];
+	int start_line, end_line;
+	int barcode_height;
+	int max_bars = 0;
+	int center;
+
+	for (y=0; y<surf->height; y+=1) {
+		// build luminance array for this scan line
+		for (x=0; x<surf->width; x+=1) {
+			fetch_pixel(surf, x, y, &r, &g, &b);
+			luminance = (r + g + b) / 3;
+			data[x] = luminance;
+		}
+
+		// locate peaks
+		detect_peak(data,
+				sizeof data / sizeof data[0],
+				emi_peaks, /* emission peaks will be put here */
+				&num_emi_peaks, /* number of emission peaks found */
+				max_emi_peaks, /* maximum number of emission peaks */
+				absop_peaks, /* absorption peaks will be put here */
+				&num_absop_peaks, /* number of absorption peaks found */
+				max_absop_peaks, /* maximum number of absorption peaks */
+				delta, /* delta used for distinguishing peaks */
+				emi_first /* should we search emission peak first of absorption peak first? */
+			   );
+
+		//printf("line peaks: %d %d\n", y, num_emi_peaks);
+		bars[y] = num_emi_peaks;
+		if (max_bars < num_emi_peaks) {
+			max_bars = num_emi_peaks;
+		}
+
+		// draw
+		for (x=0; x<num_emi_peaks; x++) {
+			draw_pixel(surf, emi_peaks[x], y, 255, 0, 0);
+		}
+		for (x=0; x<num_absop_peaks; x++) {
+			draw_pixel(surf, absop_peaks[x], y, 0, 255, 0);
+		}
+	}
+
+	find_peak_area(bars, sizeof bars / sizeof (bars[0]), &start_line, &end_line);
+	barcode_height = end_line - start_line;
+	if (barcode_height <= 0 || max_bars < 40) {
+		barcode_height = 0;
+		start_line = -1;
+		end_line = -1;
+	}
+
+	center = start_line + barcode_height / 2;
+	//printf("max_bars %d\n", max_bars);
+	printf("%d pixel high barcode found centered around line %d (start %d, end %d)\n",
+				barcode_height, center, start_line, end_line);
+	draw_line(surf, 1, start_line, 5, start_line, 255, 255, 255);
+	draw_line(surf, 1, end_line, 5, end_line, 255, 255, 255);
+	return 0;
+}
+
+
+int do_find_barcode2(struct surface *surf)
+{
+	struct point p0, p1;
+	int max, min, avg;
+	unsigned int hysteresis = 5;
+	int barcode_height;
+	int start_line, end_line;
+	int center;
+	unsigned int dark_bars;
+	int max_bars = 0;
+	int bars[surf->height];
+	int i;
+
+	memset(bars, 0, sizeof bars);
+
+	p0.x = 0;
+	p1.x = width;
+
+	for (i=0; i<surf->height-1; i+=1) {
+		p0.y = i;
+		p1.y = i+1;
+		get_luminance(surf, &p0, &p1, &max, &min, &avg);
+		contiguous_dark_sections(surf, i, avg, hysteresis, &dark_bars);
+		bars[i] = dark_bars;
+		if (dark_bars > max_bars) {
+			max_bars = dark_bars;
+		}
+	}
+
+	//for (i=0; i < sizeof bars / sizeof (bars[0]); i++) {
+		//printf("bars line %d %d\n", i, bars[i]);
+	//}
+
+	//printf("max_bars %d\n", max_bars);
+	find_peak_area(bars, sizeof bars / sizeof (bars[0]), &start_line, &end_line);
+	barcode_height = end_line - start_line;
+	if (barcode_height <= 0 || max_bars < 30) {
+		barcode_height = 0;
+		start_line = -1;
+		end_line = -1;
+	}
+
+	center = start_line + barcode_height / 2;
+	printf("%d pixel high barcode found centered around line %d (start %d, end %d)\n",
+				barcode_height, center, start_line, end_line);
+	draw_line(surf, 1, start_line, 5, start_line, 255, 255, 255);
+	draw_line(surf, 1, end_line, 5, end_line, 255, 255, 255);
+
+	return 0;
+}
+
 
 int do_find_barcode1(struct surface *surf)
 {
@@ -558,6 +861,8 @@ static int imageProcess(const void* p)
 
 	if (find_barcode) {
 		do_find_barcode1(&surf);
+		//do_find_barcode2(&surf);
+		//do_find_barcode3(&surf);
 	}
 
 	if (jpegFilename) {
