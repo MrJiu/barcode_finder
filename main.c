@@ -91,6 +91,10 @@ struct surface {
 	unsigned int bytes_per_pixel;
 };
 
+struct point {
+	unsigned int x;
+	unsigned int y;
+};
 
 static io_method        io              = IO_METHOD_MMAP;
 static int              fd              = -1;
@@ -290,7 +294,8 @@ int fetch_pixel(struct surface *surf, unsigned int x, unsigned int y,
 }
 
 
-int get_luminance(struct surface *surf, int *max, int *min, int *avg)
+int get_luminance(struct surface *surf, struct point *p0, struct point *p1,
+		int *max, int *min, int *avg)
 {
 	unsigned int i, j;
 	unsigned int luminance;
@@ -300,8 +305,13 @@ int get_luminance(struct surface *surf, int *max, int *min, int *avg)
 	*max = 0;
 	*min = 255;
 
-	for (i=0; i<surf->height; i++) {
-		for (j=0; j<surf->width; j++) {
+	if (p0->x > surf->width || p0->y > surf->height
+			|| p1->x > surf->width || p1->y > surf->height) {
+		return -1;
+	}
+
+	for (i = p0->y; i < p1->y; i++) {
+		for (j = p0->x; j < p1->x; j++) {
 			fetch_pixel(surf, j, i, &r, &g, &b);
 			luminance = (r + g + b) / 3;
 			total_luminance += luminance;
@@ -316,7 +326,8 @@ int get_luminance(struct surface *surf, int *max, int *min, int *avg)
 		}
 	}
 
-	*avg = total_luminance / (width * height);
+	unsigned int pixels = (p1->x - p0->x) * (p1->y - p0->y);
+	*avg = total_luminance / pixels;
 	return 0;
 }
 
@@ -388,6 +399,7 @@ static void imageProcess(const void* p)
 	unsigned int luminance_threshold;
 	signed int line_where_barcode_begins, line_where_barcode_ends;
 	struct surface surf;
+	struct point p0, p1;
 	unsigned char r, g, b;
 	unsigned int bar_begin, bar_end;
 	unsigned int barcount[height];
@@ -438,7 +450,12 @@ static void imageProcess(const void* p)
 	surf.height = height;
 	surf.buf = dst_copy;
 
-	get_luminance(&surf, &max, &min, &avg);
+	p0.x = 0;
+	p0.y = 0;
+	p1.x = width;
+	p1.y = height;
+
+	get_luminance(&surf, &p0, &p1, &max, &min, &avg);
 	//printf("luminance (max/min/avg): %d %d %d\n", max, min, avg);
 	luminance_threshold = avg * 3 * 0.7;
 
