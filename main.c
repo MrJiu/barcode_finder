@@ -214,14 +214,18 @@ static int xioctl(int fd, int request, void* argp)
 	Write image to jpeg file.
 
 	\param img image to write
+	\param width image width
+	\param height image height
+	\param filename filename to write
 */
-static void jpegWrite(unsigned char* img)
+static void jpegWrite(unsigned char *img, unsigned int width, unsigned int height,
+		const char *filename)
 {
 	struct jpeg_compress_struct cinfo;
 	struct jpeg_error_mgr jerr;
 	
 	JSAMPROW row_pointer[1];
-	FILE *outfile = fopen( jpegFilename, "wb" );
+	FILE *outfile = fopen(filename, "wb" );
 
 	// try to open file for saving
 	if (!outfile) {
@@ -549,7 +553,7 @@ static void imageProcess(const void* p)
 	if (jpegFilename) {
 		//printf("  jpegWrite()\n");
 		// write jpeg
-		jpegWrite(dst_copy);
+		jpegWrite(dst_copy, width, height, jpegFilename);
 	}
 
 	if (!do_fft) {
