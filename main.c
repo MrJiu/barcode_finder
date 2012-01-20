@@ -109,6 +109,7 @@ static char* jpegFilename = NULL;
 static int swap_pixels = 0;
 static int do_fft = 0;
 static int find_barcode = 0;
+static int barcode_algorithm;
 static char* deviceName = "/dev/video0";
 
 static void captureStop(void);
@@ -860,9 +861,15 @@ static int imageProcess(const void* p)
 
 
 	if (find_barcode) {
-		do_find_barcode1(&surf);
-		//do_find_barcode2(&surf);
-		//do_find_barcode3(&surf);
+		switch (barcode_algorithm) {
+			case 1: do_find_barcode1(&surf); break;
+			case 2: do_find_barcode2(&surf); break;
+			case 3: do_find_barcode3(&surf); break;
+			default:
+				printf("No such barcode algorithm: %d (valid [1..3])\n",
+						barcode_algorithm);
+				break;
+		}
 	}
 
 	if (jpegFilename) {
@@ -1494,7 +1501,7 @@ static void usage(FILE* fp, int argc, char** argv)
 		"-o | --output        JPEG output filename\n"
 		"-s | --swap-pixels   swap pixels (needed on Atmel ISI)\n"
 		"-f | --fft           FFT data to stdout\n"
-		"-b | --barcode       detect barcode\n"
+		"-b | --barcode N     use barcode detection algorithm N\n"
 		"-q | --quality       JPEG quality (0-100)\n"
 		"-m | --mmap          Use memory mapped buffers\n"
 		"-r | --read          Use read() calls\n"
@@ -1505,7 +1512,7 @@ static void usage(FILE* fp, int argc, char** argv)
 		argv[0]);
 	}
 
-static const char short_options [] = "d:ho:sfbq:mruW:H:";
+static const char short_options [] = "d:ho:sfb:q:mruW:H:";
 
 static const struct option
 long_options [] = {
@@ -1513,7 +1520,7 @@ long_options [] = {
 	{ "help",       no_argument,            NULL,           'h' },
 	{ "output",     required_argument,      NULL,           'o' },
 	{ "fft",        no_argument,            NULL,           'f' },
-	{ "barcode",    no_argument,            NULL,           'b' },
+	{ "barcode",    required_argument,      NULL,           'b' },
 	{ "quality",    required_argument,      NULL,           'q' },
 	{ "mmap",       no_argument,            NULL,           'm' },
 	{ "read",       no_argument,            NULL,           'r' },
@@ -1561,6 +1568,7 @@ int main(int argc, char **argv)
 
 			case 'b':
 				find_barcode = 1;
+				barcode_algorithm = atoi(optarg);
 				break;
 
 			case 'q':
