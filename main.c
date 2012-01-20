@@ -393,7 +393,7 @@ int draw_line(struct surface *surf,
 /**
 	process image read
 */
-static void imageProcess(const void* p)
+static int imageProcess(const void* p)
 {
 	unsigned char* src = (unsigned char*)p;
 	unsigned char *dst, *dst_copy;
@@ -415,7 +415,7 @@ static void imageProcess(const void* p)
 	dst = malloc(width*height*3*sizeof(char));
 	if (dst == NULL) {
 		perror("malloc");
-		exit(1);
+		return -1;
 	}
 
 	//printf("imageProcess() start\n");
@@ -445,7 +445,7 @@ static void imageProcess(const void* p)
 	dst_copy = malloc(width*height*3*sizeof(char));
 	if (dst_copy == NULL) {
 		perror("malloc");
-		exit(1);
+		goto free_dst;
 	}
 	memcpy(dst_copy, dst, width*height*3*sizeof(char));
 
@@ -559,7 +559,7 @@ static void imageProcess(const void* p)
 	if (!do_fft) {
 		free(dst);
 		free(dst_copy);
-		return;
+		return 0;
 	}
 
 	offset_in_line = (3 * sizeof (char)) * 40;
@@ -598,9 +598,11 @@ static void imageProcess(const void* p)
 		printf("\n");
 	}
 
-	//printf("imageProcess() end\n");
-	free(dst);
 	free(dst_copy);
+free_dst:
+	free(dst);
+	//printf("imageProcess() end\n");
+	return 0;
 }
 
 /**
