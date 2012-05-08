@@ -1532,6 +1532,8 @@ long_options [] = {
 
 int main(int argc, char **argv)
 {
+	char *endptr;
+
 	for (;;) {
 		int index, c = 0;
 
@@ -1568,12 +1570,20 @@ int main(int argc, char **argv)
 
 			case 'b':
 				find_barcode = 1;
-				barcode_algorithm = atoi(optarg);
+				barcode_algorithm = strtol(optarg, NULL, 10);
+				if (barcode_algorithm < 1 || barcode_algorithm > 3) {
+					fprintf(stderr, "algorithm must be either 1, 2 or 3\n");
+					return 1;
+				}
 				break;
 
 			case 'q':
 				// set jpeg quality
-				jpegQuality = atoi(optarg);
+				jpegQuality = strtol(optarg, &endptr, 10);
+				if ((jpegQuality == 0 && endptr == optarg) || jpegQuality > 100) {
+					fprintf(stderr, "quality must be an integer between 0 and 100\n");
+					return 1;
+				}
 				break;
 
 			case 'm':
@@ -1605,12 +1615,20 @@ int main(int argc, char **argv)
 
 			case 'W':
 				// set width
-				width = atoi(optarg);
+				width = strtol(optarg, &endptr, 10);
+				if (endptr == optarg) {
+					fprintf(stderr, "width must be an integer\n");
+					return 1;
+				}
 				break;
 
 			case 'H':
 				// set height
-				height = atoi(optarg);
+				height = strtol(optarg, &endptr, 10);
+				if (endptr == optarg) {
+					fprintf(stderr, "width must be an integer\n");
+					return 1;
+				}
 				break;
 
 			default:
