@@ -8,7 +8,7 @@ all: build
 
 build: barcode_finder
 
-barcode_finder: $(SRC)
+barcode_finder: $(SRC) Makefile
 	$(CC) $(CFLAGS) $(SRC) -o $@ $(LDFLAGS)
 
 clean:
