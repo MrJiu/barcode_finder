@@ -1,5 +1,5 @@
 CC = $(CROSS_COMPILE)gcc
-CFLAGS += -std=c99 -Wall -I ./fft/ -DITU_R_INT -DNUM_FFT=512
+CFLAGS += -g -std=c99 -Wall -I ./fft/ -DITU_R_INT -DNUM_FFT=512
 LDFLAGS += -lm -ljpeg
 
 build: barcode_finder
