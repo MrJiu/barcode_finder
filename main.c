@@ -811,11 +811,16 @@ int do_find_barcode1(struct surface *surf)
 */
 static int imageProcess(const void* p)
 {
+	static int skip_frames = 1; // the first frame(s) is usually bad, so skip it
 	unsigned char* src = (unsigned char*)p;
 	unsigned char *dst, *dst_copy;
 	unsigned int i, line, offset, offset_in_line;
 	char tmp;
 	struct surface surf;
+
+	if (skip_frames-- > 0) {
+		return 0;
+	}
 
 	dst = malloc(width*height*3*sizeof(char));
 	if (dst == NULL) {
@@ -881,7 +886,7 @@ static int imageProcess(const void* p)
 	if (!do_fft) {
 		free(dst);
 		free(dst_copy);
-		return 0;
+		return 1;
 	}
 
 	offset_in_line = (3 * sizeof (char)) * 40;
@@ -924,7 +929,7 @@ static int imageProcess(const void* p)
 free_dst:
 	free(dst);
 	//printf("imageProcess() end\n");
-	return 0;
+	return 1;
 }
 
 /**
@@ -932,6 +937,7 @@ free_dst:
 */
 static int frameRead(void)
 {
+	int ret = 0;
 	struct v4l2_buffer buf;
 #ifdef IO_USERPTR
 	unsigned int i;
@@ -957,7 +963,7 @@ static int frameRead(void)
 				}
 			}
 
-			imageProcess(buffers[0].start);
+			ret = imageProcess(buffers[0].start);
 			break;
 #endif
 
@@ -984,7 +990,7 @@ static int frameRead(void)
 
 			assert(buf.index < n_buffers);
 
-			imageProcess(buffers[buf.index].start);
+			ret = imageProcess(buffers[buf.index].start);
 
 			if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
 				errno_exit("VIDIOC_QBUF");
@@ -1019,7 +1025,7 @@ static int frameRead(void)
 
 				assert (i < n_buffers);
 
-				imageProcess((void *)buf.m.userptr);
+				ret = imageProcess((void *)buf.m.userptr);
 
 				if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
 					errno_exit("VIDIOC_QBUF");
@@ -1027,7 +1033,7 @@ static int frameRead(void)
 #endif
 	}
 
-	return 1;
+	return ret;
 }
 
 /** 
