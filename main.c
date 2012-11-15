@@ -1654,14 +1654,17 @@ static void usage(FILE* fp, int argc, char** argv)
 		"-s | --swap-pixels   swap pixels (needed on Atmel ISI)\n"
 		"-f | --fft           FFT data to stdout\n"
 		"-b | --barcode N     use barcode detection algorithm N\n"
-		"-q | --quality       JPEG quality (0-100)\n"
+		"-q | --quality       JPEG quality (0-100) [%d]\n"
 		"-m | --mmap          Use memory mapped buffers\n"
 		"-r | --read          Use read() calls\n"
 		"-u | --userptr       Use application allocated buffers\n"
-		"-W | --width         width\n"
-		"-H | --height        height\n"
+		"-W | --width         width [%d]\n"
+		"-H | --height        height [%d]\n"
 		"",
-		argv[0]);
+		argv[0],
+		jpegQuality,
+		width,
+		height);
 	}
 
 static const char short_options [] = "d:ho:sfb:q:mruW:H:";
