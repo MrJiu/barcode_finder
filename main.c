@@ -198,8 +198,18 @@ int MJPEGtoRGB888(unsigned char *mjpeg_frame, size_t mjpeg_frame_len, int width,
 	struct jpeg_error_mgr jerr;
 	JSAMPARRAY pJpegBuffer; /* Output row buffer */
 	int row_stride;         /* physical row width in output buffer */
-	unsigned char jpeg_file_buffer[1024*1024*1];
+
+	// 4 MiB should be enough for everybody ;-)
+#define BUFSIZE (1024*1024*4)
+	unsigned char jpeg_file_buffer[BUFSIZE];
 	int offset = 0;
+	int needed_buffersize = mjpeg_frame_len + sizeof jpg_header + sizeof jpeg_dht_seg;
+
+	if (BUFSIZE < needed_buffersize) {
+		printf("%s: buffer is too small: need %d bytes but have only %d\n",
+				__func__, needed_buffersize, BUFSIZE);
+		return -1;
+	}
 
 	cinfo.err = jpeg_std_error(&jerr);
 	jpeg_create_decompress(&cinfo);
