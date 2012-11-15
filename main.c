@@ -487,6 +487,10 @@ int draw_pixel(struct surface *surf, unsigned int x, unsigned int y,
 		return -1;
 	}
 
+	if (x >= surf->width || y >= surf->height) {
+		return -1;
+	}
+
 	offset = surf->width * surf->bytes_per_pixel * y + surf->bytes_per_pixel * x;
 	surf->buf[offset + 0] = r;
 	surf->buf[offset + 1] = g;
