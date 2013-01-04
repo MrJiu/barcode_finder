@@ -1191,14 +1191,16 @@ static int frameRead(void)
 */
 static void mainLoop(void)
 {
+	int i;
 	unsigned int count;
 	unsigned int numberOfTimeouts;
+	const int loops = 20;
 
 	numberOfTimeouts = 0;
 	count = 1;
 
 	while (count-- > 0) {
-		for (;;) {
+		for (i = 0; i < loops; i++) {
 			fd_set fds;
 			struct timeval tv;
 			int r;
@@ -1232,6 +1234,11 @@ static void mainLoop(void)
 				break;
 
 			/* EAGAIN - continue select loop. */
+		}
+
+		if (i >= loops) {
+			fprintf(stderr, "Error: couldn't read from video device (got EAGAIN %d times)\n", i);
+			exit(EXIT_FAILURE);
 		}
 	}
 }
