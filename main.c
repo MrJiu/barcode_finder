@@ -971,7 +971,8 @@ static int imageProcess(const void *p, size_t buflen)
 	if (use_mjpeg) {
 		ret = MJPEGtoRGB888(src, buflen, width, height, &dst);
 		if (ret != 0) {
-			return -1;
+			fprintf(stderr, "MJPEGtoRGB888 failed, trying the next frame\n");
+			return 0; // return 0 to try the next frame
 		}
 	} else {
 		dst = malloc(width*height*3*sizeof(char));
