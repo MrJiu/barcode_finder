@@ -126,19 +126,6 @@ void sighandler(int signum)
 	exit(EXIT_SUCCESS);
 }
 
-unsigned char jpg_header[] = {
-	0xff, 0xd8,                   // SOI
-	0xff, 0xe0,                   // APP0
-	0x00, 0x10,                   // APP0 Hdr size
-	0x4a, 0x46, 0x49, 0x46, 0x00, // ID string: 'JFIF' + null terminator
-	0x01, 0x01,                   // Version
-	0x00,                         // Bits per type
-	0x00, 0x00,                   // X density
-	0x00, 0x00,                   // Y density
-	0x00,                         // X Thumbnail size
-	0x00                          // Y Thumbnail size
-};
-
 /* JPEG DHT Segment for YCrCb omitted from MJPEG data */
 static unsigned char jpeg_dht_seg[] = {
 	0xff, 0xc4, 0x01, 0xa2,
@@ -180,11 +167,9 @@ static unsigned char jpeg_dht_seg[] = {
 /*
  * Convert mjpeg image buffer (from webcam) to raw pixel buffer (RGB888)
  *
- * To make a valid .jpeg structure from a webcam MPEG frame (so that libjpeg
- * can decompress it), do the following.
- * 1. Start with (fixed) jpg header
- * 2. Append (fixed) huffman table
- * 3. Append MJPEG frame data, but skip the two byte start-of-image (SOI) marker
+ * To make a valid JPEG file from a webcam MPEG frame (so that libjpeg
+ * can decompress it), insert the fixed huffman table right after the
+ * start-of-image (SOI) marker (0xff 0xd8).
  *
  * @param out_buf points to malloc'ed data (if call succeeds), user is responsible for free()
  * @return 0 success
@@ -203,7 +188,7 @@ int MJPEGtoRGB888(unsigned char *mjpeg_frame, size_t mjpeg_frame_len, int width,
 #define BUFSIZE (1024*1024*4)
 	unsigned char jpeg_file_buffer[BUFSIZE];
 	int offset = 0;
-	int needed_buffersize = mjpeg_frame_len + sizeof jpg_header + sizeof jpeg_dht_seg;
+	int needed_buffersize = mjpeg_frame_len + sizeof jpeg_dht_seg;
 
 	if (BUFSIZE < needed_buffersize) {
 		printf("%s: buffer is too small: need %d bytes but have only %d\n",
@@ -214,20 +199,22 @@ int MJPEGtoRGB888(unsigned char *mjpeg_frame, size_t mjpeg_frame_len, int width,
 	cinfo.err = jpeg_std_error(&jerr);
 	jpeg_create_decompress(&cinfo);
 
-	// To make a valid .jpeg structure from a webcam MPEG frame, do the following.
+	if (mjpeg_frame[0] != 0xff || mjpeg_frame[1] != 0xd8) {
+		fprintf(stderr, "error: frame doesn't start with 0xff 0xf8\n");
+		return -1;
+	}
 
-	// 1. Start with (fixed) jpg header
-	memcpy(jpeg_file_buffer, jpg_header, sizeof jpg_header);
+	// 1. Copy the start-of-image (SOI) marker
+	memcpy(jpeg_file_buffer, mjpeg_frame, 2);
 
 	// 2. Append (fixed) huffman table
-	memcpy(jpeg_file_buffer + sizeof jpg_header, jpeg_dht_seg, sizeof jpeg_dht_seg);
+	memcpy(jpeg_file_buffer + 2, jpeg_dht_seg, sizeof jpeg_dht_seg);
 
 	// 3. Append MJPEG frame data, but skip the two byte start-of-image (SOI) marker
-	memcpy(jpeg_file_buffer + sizeof jpg_header + sizeof jpeg_dht_seg,
-			mjpeg_frame + 2,
+	memcpy(jpeg_file_buffer + 2 + sizeof jpeg_dht_seg, mjpeg_frame + 2,
 			mjpeg_frame_len - 2);
 
-	jpeg_mem_src(&cinfo, jpeg_file_buffer, (unsigned long)mjpeg_frame_len + sizeof jpg_header + sizeof jpeg_dht_seg);
+	jpeg_mem_src(&cinfo, jpeg_file_buffer, (unsigned long)mjpeg_frame_len + sizeof jpeg_dht_seg);
 
 	if (JPEG_HEADER_OK != jpeg_read_header(&cinfo, 1)) {
 		printf("jpeg_read_header: error\n");
