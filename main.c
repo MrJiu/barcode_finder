@@ -1217,8 +1217,10 @@ static void mainLoop(void)
 				}
 			}
 
-			if (frameRead())
+			if (frameRead()) {
+				count = 0;
 				break;
+			}
 
 			/* EAGAIN - continue select loop. */
 		}
